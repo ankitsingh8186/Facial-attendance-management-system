@@ -1,0 +1,1855 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FaceTrack — Live Attendance</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #090b0f;
+      --bg2: #0e1116;
+      --surface: #131820;
+      --surface2: #1a2030;
+      --border: rgba(255,255,255,0.07);
+      --border2: rgba(255,255,255,0.12);
+      --ink: #f0f4ff;
+      --ink2: #8892a4;
+      --ink3: #4a5568;
+      --accent: #00e5ff;
+      --accent2: #0099dd;
+      --accent-glow: rgba(0,229,255,0.15);
+      --green: #00ff88;
+      --green-dim: rgba(0,255,136,0.12);
+      --red: #ff4455;
+      --red-dim: rgba(255,68,85,0.12);
+      --yellow: #ffcc00;
+      --yellow-dim: rgba(255,204,0,0.12);
+      --mono: 'Space Mono', monospace;
+      --sans: 'Outfit', sans-serif;
+      --radius: 16px;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: var(--sans);
+      background: var(--bg);
+      color: var(--ink);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Scanline bg effect */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0,229,255,0.008) 2px,
+        rgba(0,229,255,0.008) 4px
+      );
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── HEADER ─────────────────────────────────────── */
+    header {
+      position: relative;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 32px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(9,11,15,0.9);
+      backdrop-filter: blur(20px);
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .logo-mark {
+      width: 42px;
+      height: 42px;
+      border: 2px solid var(--accent);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      box-shadow: 0 0 20px var(--accent-glow);
+    }
+
+    .logo-mark::before {
+      content: '';
+      position: absolute;
+      inset: 4px;
+      border: 1px solid rgba(0,229,255,0.3);
+      border-radius: 6px;
+    }
+
+    .logo-scan {
+      width: 18px;
+      height: 18px;
+      border: 2px solid var(--accent);
+      border-radius: 2px;
+      position: relative;
+    }
+
+    .logo-scan::after {
+      content: '';
+      position: absolute;
+      left: 0; right: 0;
+      height: 1px;
+      background: var(--accent);
+      top: 50%;
+      box-shadow: 0 0 6px var(--accent);
+      animation: scanline 2s ease-in-out infinite;
+    }
+
+    @keyframes scanline {
+      0% { top: 10%; }
+      100% { top: 90%; }
+    }
+
+    .logo-text {
+      font-size: 1.4rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: var(--ink);
+    }
+
+    .logo-text em {
+      font-style: normal;
+      color: var(--accent);
+    }
+
+    .logo-sub {
+      font-family: var(--mono);
+      font-size: 0.6rem;
+      color: var(--ink3);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-top: 2px;
+    }
+
+    .header-status {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .status-pill {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 99px;
+      padding: 6px 14px;
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      color: var(--ink2);
+    }
+
+    .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 8px var(--green);
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(0.8); }
+    }
+
+    #clock {
+      font-family: var(--mono);
+      font-size: 0.85rem;
+      color: var(--accent);
+      letter-spacing: 0.05em;
+    }
+
+    /* ── TABS ─────────────────────────────────────── */
+    nav {
+      position: relative;
+      z-index: 10;
+      display: flex;
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      padding: 0 32px;
+    }
+
+    .tab {
+      padding: 14px 22px;
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      color: var(--ink3);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      letter-spacing: 0.06em;
+      transition: all 0.2s;
+      user-select: none;
+    }
+
+    .tab.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+
+    .tab:hover:not(.active) { color: var(--ink2); }
+
+    /* ── MAIN ─────────────────────────────────────── */
+    main {
+      position: relative;
+      z-index: 1;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 32px 24px;
+    }
+
+    .page { display: none; }
+    .page.active { display: block; }
+
+    /* ── CAMERA PAGE ─────────────────────────────── */
+    .cam-layout {
+      display: grid;
+      grid-template-columns: 1fr 380px;
+      gap: 24px;
+      align-items: start;
+    }
+
+    @media (max-width: 900px) {
+      .cam-layout { grid-template-columns: 1fr; }
+    }
+
+    /* Camera Panel */
+    .cam-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .cam-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .cam-label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      color: var(--ink2);
+      letter-spacing: 0.06em;
+    }
+
+    .rec-indicator {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      color: var(--red);
+    }
+
+    .rec-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--red);
+      animation: pulse 1s ease-in-out infinite;
+    }
+
+    /* Video */
+    .cam-viewport {
+      position: relative;
+      background: #000;
+      aspect-ratio: 4/3;
+    }
+
+    #video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    /* Face detection overlay */
+    .face-frame {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 200px; height: 240px;
+      pointer-events: none;
+    }
+
+    .face-frame-corner {
+      position: absolute;
+      width: 28px; height: 28px;
+      border-color: var(--accent);
+      border-style: solid;
+      box-shadow: 0 0 12px var(--accent-glow);
+    }
+
+    .face-frame-corner.tl { top: 0; left: 0; border-width: 3px 0 0 3px; }
+    .face-frame-corner.tr { top: 0; right: 0; border-width: 3px 3px 0 0; }
+    .face-frame-corner.bl { bottom: 0; left: 0; border-width: 0 0 3px 3px; }
+    .face-frame-corner.br { bottom: 0; right: 0; border-width: 0 3px 3px 0; }
+
+    /* Scanning animation */
+    .scan-beam {
+      position: absolute;
+      left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--accent), transparent);
+      box-shadow: 0 0 10px var(--accent);
+      animation: beamScan 3s ease-in-out infinite;
+      opacity: 0;
+    }
+
+    @keyframes beamScan {
+      0% { top: 0; opacity: 1; }
+      100% { top: 100%; opacity: 0; }
+    }
+
+    /* Capture flash */
+    .flash-overlay {
+      position: absolute;
+      inset: 0;
+      background: white;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.05s;
+    }
+
+    .flash-overlay.flash {
+      opacity: 0.7;
+      transition: opacity 0.3s;
+    }
+
+    /* Status overlay on camera */
+    .cam-status-overlay {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
+      padding: 20px 16px 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .cam-status-text {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      color: rgba(255,255,255,0.8);
+    }
+
+    .cam-status-text strong { color: var(--accent); }
+
+    /* Canvas (hidden, for capture) */
+    #captureCanvas { display: none; }
+
+    /* Cam Controls */
+    .cam-controls {
+      padding: 16px 20px;
+      display: flex;
+      gap: 10px;
+      border-top: 1px solid var(--border);
+    }
+
+    .btn-capture {
+      flex: 1;
+      padding: 13px;
+      background: var(--accent);
+      color: #000;
+      border: none;
+      border-radius: 10px;
+      font-family: var(--sans);
+      font-size: 0.9rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.2s;
+      letter-spacing: 0.02em;
+    }
+
+    .btn-capture:hover:not(:disabled) {
+      background: #33eeff;
+      box-shadow: 0 0 20px var(--accent-glow);
+    }
+
+    .btn-capture:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .btn-secondary {
+      padding: 13px 16px;
+      background: var(--surface2);
+      color: var(--ink2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-family: var(--sans);
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-secondary:hover { border-color: var(--border2); color: var(--ink); }
+
+    /* Auto mode toggle */
+    .auto-mode-bar {
+      padding: 12px 20px;
+      background: var(--bg2);
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .auto-label {
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      color: var(--ink2);
+      letter-spacing: 0.04em;
+    }
+
+    /* Toggle */
+    .toggle-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+    }
+
+    .toggle {
+      width: 40px; height: 22px;
+      background: var(--surface2);
+      border: 1px solid var(--border2);
+      border-radius: 99px;
+      position: relative;
+      transition: background 0.2s;
+      cursor: pointer;
+    }
+
+    .toggle.on { background: var(--accent); border-color: var(--accent); }
+
+    .toggle::after {
+      content: '';
+      position: absolute;
+      width: 16px; height: 16px;
+      background: white;
+      border-radius: 50%;
+      top: 2px; left: 2px;
+      transition: left 0.2s;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+
+    .toggle.on::after { left: 20px; }
+
+    .toggle-label {
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      color: var(--ink2);
+    }
+
+    /* Countdown ring */
+    .countdown-ring {
+      position: absolute;
+      top: 12px; right: 12px;
+      width: 44px; height: 44px;
+      display: none;
+    }
+
+    .countdown-ring.show { display: block; }
+
+    .countdown-ring svg { transform: rotate(-90deg); }
+
+    .countdown-ring circle {
+      fill: none;
+      stroke: var(--accent);
+      stroke-width: 3;
+      stroke-dasharray: 110;
+      stroke-dashoffset: 110;
+      transition: stroke-dashoffset 1s linear;
+    }
+
+    .countdown-num {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--mono);
+      font-size: 0.85rem;
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    /* ── RESULT PANEL ────────────────────────────── */
+    .result-area {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .result-area-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      color: var(--ink2);
+      letter-spacing: 0.06em;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .result-idle {
+      padding: 60px 24px;
+      text-align: center;
+    }
+
+    .result-idle-icon {
+      font-size: 48px;
+      margin-bottom: 14px;
+      opacity: 0.4;
+      filter: grayscale(1);
+    }
+
+    .result-idle-text {
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      color: var(--ink3);
+      line-height: 1.6;
+    }
+
+    /* Processing state */
+    .result-processing {
+      padding: 50px 24px;
+      text-align: center;
+      display: none;
+    }
+
+    .processing-ring {
+      width: 64px; height: 64px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 18px;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .processing-text {
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      color: var(--accent);
+    }
+
+    /* Result Card */
+    .result-card {
+      display: none;
+      padding: 20px;
+    }
+
+    .result-banner {
+      border-radius: 10px;
+      padding: 16px 18px;
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+
+    .result-banner.present { background: var(--green-dim); border: 1px solid rgba(0,255,136,0.2); }
+    .result-banner.unknown { background: var(--red-dim); border: 1px solid rgba(255,68,85,0.2); }
+    .result-banner.warning { background: var(--yellow-dim); border: 1px solid rgba(255,204,0,0.2); }
+
+    .result-icon { font-size: 32px; flex-shrink: 0; }
+
+    .result-banner-title {
+      font-size: 1rem;
+      font-weight: 700;
+      margin-bottom: 3px;
+    }
+
+    .present .result-banner-title { color: var(--green); }
+    .unknown .result-banner-title { color: var(--red); }
+    .warning .result-banner-title { color: var(--yellow); }
+
+    .result-banner-msg {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      color: var(--ink2);
+      line-height: 1.5;
+    }
+
+    /* Confidence Bar */
+    .conf-wrap { margin: 12px 0; }
+    .conf-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      color: var(--ink3);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .conf-val { color: var(--accent); font-weight: 700; }
+
+    .conf-bar {
+      height: 5px;
+      background: var(--surface2);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+
+    .conf-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent2), var(--accent));
+      border-radius: 99px;
+      box-shadow: 0 0 8px var(--accent-glow);
+      transition: width 1s ease;
+      width: 0;
+    }
+
+    /* Details */
+    .detail-grid {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      margin: 12px 0;
+    }
+
+    .detail-row {
+      display: flex;
+      align-items: center;
+      padding: 9px 14px;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.82rem;
+    }
+
+    .detail-row:last-child { border-bottom: none; }
+
+    .detail-key {
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      color: var(--ink3);
+      width: 110px;
+      flex-shrink: 0;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .detail-val { font-weight: 600; color: var(--ink); }
+
+    /* Captured thumb */
+    .captured-thumb {
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      margin: 12px 0;
+    }
+
+    .captured-thumb img {
+      width: 100%;
+      height: 160px;
+      object-fit: cover;
+      display: block;
+    }
+
+    /* Register prompt */
+    .register-prompt {
+      background: var(--surface2);
+      border: 1px solid rgba(255,204,0,0.2);
+      border-radius: 10px;
+      padding: 16px;
+      margin-top: 12px;
+    }
+
+    .register-prompt h4 {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--yellow);
+      margin-bottom: 12px;
+    }
+
+    .prompt-field label {
+      display: block;
+      font-family: var(--mono);
+      font-size: 0.62rem;
+      color: var(--ink3);
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .prompt-field input, .prompt-field select {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border2);
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-family: var(--sans);
+      font-size: 0.82rem;
+      color: var(--ink);
+      margin-bottom: 8px;
+      transition: border-color 0.2s;
+    }
+
+    .prompt-field input:focus, .prompt-field select:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    .prompt-field input::placeholder { color: var(--ink3); }
+
+    .btn-register-now {
+      width: 100%;
+      padding: 11px;
+      background: var(--yellow);
+      color: #000;
+      border: none;
+      border-radius: 8px;
+      font-family: var(--sans);
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 4px;
+      transition: all 0.2s;
+    }
+
+    .btn-register-now:hover { background: #ffe033; }
+    .btn-register-now:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* ── REGISTER PAGE ───────────────────────────── */
+    .reg-layout {
+      max-width: 560px;
+      margin: 0 auto;
+    }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .panel-header {
+      padding: 18px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .panel-title {
+      font-size: 0.8rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--ink2);
+    }
+
+    .panel-badge {
+      font-family: var(--mono);
+      font-size: 0.6rem;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      padding: 2px 8px;
+      border-radius: 99px;
+      color: var(--ink3);
+    }
+
+    .panel-body { padding: 24px; }
+
+    .field { margin-bottom: 14px; }
+
+    .field label {
+      display: block;
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      color: var(--ink3);
+      margin-bottom: 5px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .field input, .field select {
+      width: 100%;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 11px 14px;
+      font-family: var(--sans);
+      font-size: 0.88rem;
+      color: var(--ink);
+      transition: border-color 0.2s;
+    }
+
+    .field input:focus, .field select:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    .field input::placeholder { color: var(--ink3); }
+    .field select option { background: var(--surface2); }
+
+    .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+    .drop-zone {
+      border: 2px dashed var(--border2);
+      border-radius: 10px;
+      padding: 32px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.25s;
+      background: var(--surface2);
+      position: relative;
+    }
+
+    .drop-zone:hover { border-color: var(--accent); background: var(--accent-glow); }
+
+    .drop-zone input {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      cursor: pointer;
+      width: 100%;
+      height: 100%;
+    }
+
+    .drop-icon { font-size: 36px; margin-bottom: 8px; display: block; }
+    .drop-title { font-size: 0.9rem; font-weight: 600; margin-bottom: 4px; }
+    .drop-sub { font-family: var(--mono); font-size: 0.65rem; color: var(--ink3); }
+
+    .photo-selected {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      color: var(--green);
+      margin-top: 8px;
+      display: none;
+    }
+
+    .btn-primary {
+      width: 100%;
+      padding: 13px;
+      background: var(--accent);
+      color: #000;
+      border: none;
+      border-radius: 10px;
+      font-family: var(--sans);
+      font-size: 0.9rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.2s;
+      margin-top: 16px;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: #33eeff;
+      box-shadow: 0 0 20px var(--accent-glow);
+    }
+
+    .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .mini-spinner {
+      width: 14px; height: 14px;
+      border: 2px solid rgba(0,0,0,0.2);
+      border-top-color: #000;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      display: none;
+    }
+
+    /* ── RECORDS PAGE ───────────────────────────── */
+    .records-controls {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .records-title {
+      font-size: 1.1rem;
+      font-weight: 800;
+    }
+
+    .filter-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .filter-row input[type="date"] {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      color: var(--ink);
+    }
+
+    .btn-filter {
+      padding: 8px 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--ink2);
+      font-family: var(--sans);
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-filter:hover, .btn-filter.active {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* Stats */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    @media (max-width: 600px) {
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    .stat-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px 16px;
+      text-align: center;
+    }
+
+    .stat-num {
+      font-family: var(--mono);
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: var(--accent);
+      line-height: 1;
+    }
+
+    .stat-lbl {
+      font-size: 0.65rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--ink3);
+      margin-top: 4px;
+    }
+
+    /* Table */
+    .table-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .table-wrap { overflow-x: auto; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.83rem;
+    }
+
+    thead tr {
+      background: var(--surface2);
+      border-bottom: 1px solid var(--border);
+    }
+
+    thead th {
+      padding: 12px 16px;
+      text-align: left;
+      font-family: var(--mono);
+      font-size: 0.62rem;
+      letter-spacing: 0.08em;
+      font-weight: 400;
+      text-transform: uppercase;
+      color: var(--ink3);
+    }
+
+    tbody tr {
+      border-bottom: 1px solid var(--border);
+      transition: background 0.15s;
+    }
+
+    tbody tr:hover { background: rgba(0,229,255,0.03); }
+    tbody tr:last-child { border-bottom: none; }
+
+    tbody td { padding: 12px 16px; }
+
+    .emp-name { font-weight: 700; color: var(--ink); }
+    .emp-id { font-family: var(--mono); font-size: 0.68rem; color: var(--ink3); margin-top: 2px; }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 10px;
+      border-radius: 99px;
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      font-family: var(--mono);
+    }
+
+    .badge-present { background: var(--green-dim); color: var(--green); }
+    .badge-unknown { background: var(--red-dim); color: var(--red); }
+
+    .conf-pill {
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      padding: 3px 10px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 99px;
+      color: var(--ink2);
+    }
+
+    .time-mono { font-family: var(--mono); font-size: 0.72rem; color: var(--ink3); }
+
+    .empty-state {
+      text-align: center;
+      padding: 80px 20px;
+      color: var(--ink3);
+      font-family: var(--mono);
+      font-size: 0.8rem;
+    }
+
+    .empty-state .big { font-size: 48px; margin-bottom: 14px; display: block; opacity: 0.4; }
+
+    /* ── TOAST ──────────────────────────────────── */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--ink);
+      padding: 14px 18px;
+      border-radius: 12px;
+      font-size: 0.84rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      transform: translateY(80px) scale(0.95);
+      opacity: 0;
+      transition: all 0.3s cubic-bezier(0.34,1.56,0.64,1);
+      z-index: 1000;
+      max-width: 360px;
+      backdrop-filter: blur(20px);
+    }
+
+    .toast.show {
+      transform: translateY(0) scale(1);
+      opacity: 1;
+    }
+
+    .toast.success { border-left: 3px solid var(--green); }
+    .toast.error { border-left: 3px solid var(--red); }
+    .toast.info { border-left: 3px solid var(--accent); }
+
+    /* camera off message */
+    .cam-off {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg2);
+      gap: 12px;
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      color: var(--ink3);
+    }
+
+    .cam-off .icon { font-size: 48px; opacity: 0.4; }
+
+    .btn-start-cam {
+      padding: 10px 20px;
+      background: var(--accent);
+      color: #000;
+      border: none;
+      border-radius: 8px;
+      font-family: var(--sans);
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">
+    <div class="logo-mark">
+      <div class="logo-scan"></div>
+    </div>
+    <div>
+      <div class="logo-text">Face<em>Track</em></div>
+      <div class="logo-sub">Live Attendance System</div>
+    </div>
+  </div>
+  <div class="header-status">
+    <div class="status-pill">
+      <div class="dot"></div>
+      LIVE
+    </div>
+    <div id="clock">--:--:--</div>
+  </div>
+</header>
+
+<!-- TABS -->
+<nav>
+  <div class="tab active" onclick="switchTab('live')">01 · Live Camera</div>
+  <div class="tab" onclick="switchTab('register')">02 · Register Employee</div>
+  <div class="tab" onclick="switchTab('records')">03 · Records</div>
+</nav>
+
+<!-- MAIN -->
+<main>
+
+  <!-- ── PAGE: LIVE CAMERA ─────────────────────── -->
+  <div class="page active" id="page-live">
+    <div class="cam-layout">
+
+      <!-- Camera -->
+      <div class="cam-panel">
+        <div class="cam-header">
+          <div class="cam-label">
+            📹 LIVE FEED — <span id="camResLabel">initializing...</span>
+          </div>
+          <div class="rec-indicator" id="recIndicator" style="display:none;">
+            <div class="rec-dot"></div>
+            PROCESSING
+          </div>
+        </div>
+
+        <div class="cam-viewport">
+          <video id="video" autoplay playsinline muted></video>
+          <canvas id="captureCanvas"></canvas>
+
+          <!-- Face guide frame -->
+          <div class="face-frame" id="faceFrame">
+            <div class="face-frame-corner tl"></div>
+            <div class="face-frame-corner tr"></div>
+            <div class="face-frame-corner bl"></div>
+            <div class="face-frame-corner br"></div>
+            <div class="scan-beam" id="scanBeam"></div>
+          </div>
+
+          <!-- Camera off placeholder -->
+          <div class="cam-off" id="camOff">
+            <div class="icon">📷</div>
+            <div>Camera not started</div>
+            <button class="btn-start-cam" onclick="startCamera()">Start Camera</button>
+          </div>
+
+          <!-- Countdown ring -->
+          <div class="countdown-ring" id="countdownRing">
+            <svg width="44" height="44" viewBox="0 0 44 44">
+              <circle cx="22" cy="22" r="18" id="countdownCircle"/>
+            </svg>
+            <div class="countdown-num" id="countdownNum">3</div>
+          </div>
+
+          <!-- Status overlay -->
+          <div class="cam-status-overlay" id="camStatusOverlay" style="display:none;">
+            <div class="cam-status-text" id="camStatusText"></div>
+          </div>
+
+          <!-- Flash -->
+          <div class="flash-overlay" id="flashOverlay"></div>
+        </div>
+
+        <!-- Controls -->
+        <div class="cam-controls">
+          <button class="btn-capture" id="captureBtn" onclick="captureAndMark()" disabled>
+            ⚡ Capture & Mark Attendance
+          </button>
+          <button class="btn-secondary" onclick="startCamera()">↺</button>
+        </div>
+
+        <!-- Auto mode -->
+        <div class="auto-mode-bar">
+          <div class="auto-label">AUTO-CAPTURE MODE</div>
+          <div class="toggle-wrap" onclick="toggleAuto()">
+            <div class="toggle" id="autoToggle"></div>
+            <span class="toggle-label" id="autoLabel">OFF</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Result Panel -->
+      <div class="result-area">
+        <div class="result-area-header">
+          🔍 RECOGNITION RESULT
+        </div>
+
+        <div class="result-idle" id="resultIdle">
+          <div class="result-idle-icon">👁</div>
+          <div class="result-idle-text">
+            Position your face within the guide frame<br/>
+            and click Capture to mark attendance
+          </div>
+        </div>
+
+        <div class="result-processing" id="resultProcessing">
+          <div class="processing-ring"></div>
+          <div class="processing-text">Analyzing face with AI...</div>
+        </div>
+
+        <div class="result-card" id="resultCard">
+          <!-- Filled dynamically -->
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── PAGE: REGISTER ────────────────────────── -->
+  <div class="page" id="page-register">
+    <div class="reg-layout">
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">Register New Employee</span>
+          <span class="panel-badge">Face Enrollment</span>
+        </div>
+        <div class="panel-body">
+          <div class="field-row">
+            <div class="field">
+              <label>Employee ID *</label>
+              <input type="text" id="r_id" placeholder="EMP001" />
+            </div>
+            <div class="field">
+              <label>Full Name *</label>
+              <input type="text" id="r_name" placeholder="Priya Sharma" />
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label>Department</label>
+              <select id="r_dept">
+                <option>Engineering</option>
+                <option>Marketing</option>
+                <option>Finance</option>
+                <option>HR</option>
+                <option>Operations</option>
+                <option>Sales</option>
+                <option>General</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Email</label>
+              <input type="email" id="r_email" placeholder="name@company.com" />
+            </div>
+          </div>
+          <div class="field">
+            <label>Face Photo *</label>
+            <div class="drop-zone" id="regDZ">
+              <input type="file" id="r_photo" accept="image/jpeg,image/png,image/webp" onchange="handleRegPhoto(event)" />
+              <span class="drop-icon">🤳</span>
+              <div class="drop-title">Click to upload photo</div>
+              <div class="drop-sub">Clear front-facing · JPEG · PNG · WebP</div>
+            </div>
+            <div class="photo-selected" id="photoSelected"></div>
+          </div>
+          <button class="btn-primary" id="regBtn" onclick="doRegister()">
+            <div class="mini-spinner" id="regSpin"></div>
+            <span id="regBtnTxt">✅ Register Employee</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── PAGE: RECORDS ─────────────────────────── -->
+  <div class="page" id="page-records">
+    <div class="records-controls">
+      <div class="records-title">Attendance Records</div>
+      <div class="filter-row">
+        <input type="date" id="dateFilter" />
+        <button class="btn-filter" onclick="fetchByDate()">Filter Date</button>
+        <button class="btn-filter" onclick="fetchAll()">All Records</button>
+      </div>
+    </div>
+
+    <div class="stats-grid" id="statsGrid" style="display:none;">
+      <div class="stat-box">
+        <div class="stat-num" id="sTotal">0</div>
+        <div class="stat-lbl">Total</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-num" id="sPresent" style="color:var(--green);">0</div>
+        <div class="stat-lbl">Present</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-num" id="sUnknown" style="color:var(--red);">0</div>
+        <div class="stat-lbl">Unrecognized</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-num" id="sAvg">—</div>
+        <div class="stat-lbl">Avg Confidence</div>
+      </div>
+    </div>
+
+    <div class="table-card">
+      <div class="table-wrap">
+        <table id="recTable" style="display:none;">
+          <thead>
+            <tr>
+              <th>Employee</th>
+              <th>Status</th>
+              <th>Confidence</th>
+              <th>Date</th>
+              <th>Time</th>
+            </tr>
+          </thead>
+          <tbody id="recBody"></tbody>
+        </table>
+        <div class="empty-state" id="recEmpty">
+          <span class="big">📋</span>
+          Click "All Records" to load data
+        </div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+  const API = window.location.hostname === 'localhost'
+    ? 'http://localhost:3001/api'
+    : '/api';
+
+  // ── Clock ──────────────────────────────────────
+  function tick() {
+    document.getElementById('clock').textContent =
+      new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+  }
+  setInterval(tick, 1000); tick();
+  document.getElementById('dateFilter').value = new Date().toISOString().split('T')[0];
+
+  // ── Toast ──────────────────────────────────────
+  function toast(msg, type = 'success') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = `toast ${type} show`;
+    setTimeout(() => t.classList.remove('show'), 3800);
+  }
+
+  // ── Tabs ───────────────────────────────────────
+  function switchTab(name) {
+    document.querySelectorAll('.tab').forEach((t, i) => {
+      t.classList.toggle('active', ['live', 'register', 'records'][i] === name);
+    });
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.getElementById(`page-${name}`).classList.add('active');
+    if (name === 'records') fetchAll();
+  }
+
+  // ── Camera ─────────────────────────────────────
+  let stream = null;
+  let autoMode = false;
+  let autoTimer = null;
+
+  async function startCamera() {
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' }
+      });
+      const video = document.getElementById('video');
+      video.srcObject = stream;
+      video.onloadedmetadata = () => {
+        document.getElementById('camResLabel').textContent =
+          `${video.videoWidth}×${video.videoHeight}`;
+        document.getElementById('camOff').style.display = 'none';
+        document.getElementById('camStatusOverlay').style.display = 'flex';
+        document.getElementById('camStatusText').innerHTML =
+          'Face your camera · <strong>Position within frame</strong>';
+        document.getElementById('captureBtn').disabled = false;
+        if (autoMode) scheduleAutoCapture();
+      };
+    } catch (err) {
+      toast('Camera access denied. Please allow camera permission.', 'error');
+    }
+  }
+
+  // Auto-capture mode
+  function toggleAuto() {
+    autoMode = !autoMode;
+    document.getElementById('autoToggle').classList.toggle('on', autoMode);
+    document.getElementById('autoLabel').textContent = autoMode ? 'ON' : 'OFF';
+    if (autoMode && stream) scheduleAutoCapture();
+    else clearAutoCapture();
+  }
+
+  function scheduleAutoCapture() {
+    clearAutoCapture();
+    startCountdown(5, () => captureAndMark());
+  }
+
+  function clearAutoCapture() {
+    clearTimeout(autoTimer);
+    document.getElementById('countdownRing').classList.remove('show');
+  }
+
+  let countdownInterval = null;
+  function startCountdown(secs, cb) {
+    clearInterval(countdownInterval);
+    const ring = document.getElementById('countdownRing');
+    const num = document.getElementById('countdownNum');
+    const circle = document.getElementById('countdownCircle');
+    const circumference = 110;
+    let remaining = secs;
+
+    ring.classList.add('show');
+    num.textContent = remaining;
+    circle.style.strokeDashoffset = 0;
+
+    countdownInterval = setInterval(() => {
+      remaining--;
+      num.textContent = remaining;
+      circle.style.strokeDashoffset = ((secs - remaining) / secs) * circumference;
+      if (remaining <= 0) {
+        clearInterval(countdownInterval);
+        ring.classList.remove('show');
+        cb();
+      }
+    }, 1000);
+  }
+
+  // Flash effect
+  function flash() {
+    const f = document.getElementById('flashOverlay');
+    f.classList.add('flash');
+    setTimeout(() => f.classList.remove('flash'), 350);
+  }
+
+  // ── Capture & Mark ─────────────────────────────
+  let lastCapturedBlob = null;
+  let lastCapturedDescriptor = null;
+  let lastCapturedImageUrl = null;
+  let isProcessing = false;
+
+  async function captureAndMark() {
+    if (isProcessing) return;
+    if (!stream) { toast('Camera not started', 'error'); return; }
+    isProcessing = true;
+    clearAutoCapture();
+
+    flash();
+
+    // Capture frame
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('captureCanvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext('2d').drawImage(video, 0, 0);
+
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.92));
+    lastCapturedBlob = blob;
+
+    // Show processing
+    showState('processing');
+    document.getElementById('recIndicator').style.display = 'flex';
+    document.getElementById('captureBtn').disabled = true;
+
+    const formData = new FormData();
+    formData.append('image', blob, 'capture.jpg');
+
+    try {
+      const res = await fetch(`${API}/attendance/mark`, { method: 'POST', body: formData });
+      const data = await res.json();
+
+      document.getElementById('recIndicator').style.display = 'none';
+
+      if (!res.ok) {
+        renderError(data.message);
+        toast(data.message, 'error');
+        return;
+      }
+
+      if (data.matched) {
+        renderPresent(data);
+        toast(`✅ ${data.attendance.employeeName} — Attendance Marked!`, 'success');
+        if (data.alreadyMarked) toast(`⚠️ Already marked today`, 'info');
+      } else {
+        lastCapturedDescriptor = data.capturedDescriptor;
+        lastCapturedImageUrl = data.capturedImageUrl;
+        renderUnknown(data);
+        toast('❌ Face not recognized — please register', 'error');
+      }
+
+    } catch (err) {
+      renderError('Network error — is the backend running on port 3001?');
+      toast('Network error', 'error');
+    } finally {
+      isProcessing = false;
+      document.getElementById('captureBtn').disabled = false;
+      if (autoMode && stream) scheduleAutoCapture();
+    }
+  }
+
+  function showState(state) {
+    document.getElementById('resultIdle').style.display = 'none';
+    document.getElementById('resultProcessing').style.display = state === 'processing' ? 'block' : 'none';
+    document.getElementById('resultCard').style.display = state === 'result' ? 'block' : 'none';
+  }
+
+  function renderPresent(data) {
+    showState('result');
+    const att = data.attendance;
+    const emp = att.employee || {};
+    const alreadyNote = data.alreadyMarked
+      ? `<div style="margin-top:6px;font-size:0.68rem;color:var(--yellow);">⚠ Already marked today</div>` : '';
+
+    document.getElementById('resultCard').innerHTML = `
+      <div class="result-banner present">
+        <div class="result-icon">✅</div>
+        <div>
+          <div class="result-banner-title">${data.alreadyMarked ? 'Already Marked' : 'Attendance Marked!'}</div>
+          <div class="result-banner-msg">${data.message}${alreadyNote}</div>
+        </div>
+      </div>
+
+      <div class="conf-wrap">
+        <div class="conf-header">
+          <span>Match Confidence</span>
+          <span class="conf-val" id="confVal">${att.confidence}%</span>
+        </div>
+        <div class="conf-bar">
+          <div class="conf-fill" id="confFill"></div>
+        </div>
+      </div>
+
+      <div class="detail-grid">
+        <div class="detail-row">
+          <span class="detail-key">Name</span>
+          <span class="detail-val">${att.employeeName}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-key">Emp ID</span>
+          <span class="detail-val">${att.employeeId}</span>
+        </div>
+        ${emp.department ? `<div class="detail-row"><span class="detail-key">Dept</span><span class="detail-val">${emp.department}</span></div>` : ''}
+        <div class="detail-row">
+          <span class="detail-key">Status</span>
+          <span class="detail-val" style="color:var(--green);">● PRESENT</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-key">Time</span>
+          <span class="detail-val">${new Date(att.timestamp).toLocaleTimeString('en-IN')}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-key">Date</span>
+          <span class="detail-val">${att.date}</span>
+        </div>
+      </div>
+    `;
+    setTimeout(() => {
+      const fill = document.getElementById('confFill');
+      if (fill) fill.style.width = att.confidence + '%';
+    }, 100);
+  }
+
+  function renderUnknown(data) {
+    showState('result');
+    document.getElementById('resultCard').innerHTML = `
+      <div class="result-banner unknown">
+        <div class="result-icon">❓</div>
+        <div>
+          <div class="result-banner-title">Face Not Recognized</div>
+          <div class="result-banner-msg">${data.message}</div>
+        </div>
+      </div>
+
+      ${lastCapturedImageUrl ? `
+        <div class="captured-thumb">
+          <img src="${lastCapturedImageUrl}" alt="Captured face" />
+        </div>
+      ` : ''}
+
+      <div class="register-prompt">
+        <h4>📝 Register this person & mark attendance</h4>
+        <div class="prompt-field">
+          <label>Employee ID *</label>
+          <input type="text" id="qr_id" placeholder="EMP001" />
+        </div>
+        <div class="prompt-field">
+          <label>Full Name *</label>
+          <input type="text" id="qr_name" placeholder="Full Name" />
+        </div>
+        <div class="prompt-field">
+          <label>Department</label>
+          <select id="qr_dept">
+            <option>Engineering</option>
+            <option>Marketing</option>
+            <option>Finance</option>
+            <option>HR</option>
+            <option>Operations</option>
+            <option>Sales</option>
+            <option>General</option>
+          </select>
+        </div>
+        <button class="btn-register-now" id="quickRegBtn" onclick="quickRegister()">
+          ✅ Register & Mark Attendance
+        </button>
+      </div>
+    `;
+  }
+
+  function renderError(msg) {
+    showState('result');
+    document.getElementById('resultCard').innerHTML = `
+      <div class="result-banner warning">
+        <div class="result-icon">⚠️</div>
+        <div>
+          <div class="result-banner-title">Error</div>
+          <div class="result-banner-msg">${msg}</div>
+        </div>
+      </div>
+    `;
+  }
+
+  // Quick register from result panel
+  async function quickRegister() {
+    const id = document.getElementById('qr_id')?.value.trim();
+    const name = document.getElementById('qr_name')?.value.trim();
+    const dept = document.getElementById('qr_dept')?.value;
+
+    if (!id || !name) { toast('ID and Name are required', 'error'); return; }
+    if (!lastCapturedImageUrl) { toast('No captured image found', 'error'); return; }
+
+    const btn = document.getElementById('quickRegBtn');
+    btn.disabled = true;
+    btn.textContent = 'Registering...';
+
+    try {
+      const body = new URLSearchParams({
+        employeeId: id,
+        name,
+        department: dept || 'General',
+        capturedImagePath: lastCapturedImageUrl,
+        capturedDescriptor: lastCapturedDescriptor ? JSON.stringify(lastCapturedDescriptor) : '{}'
+      });
+
+      const res = await fetch(`${API}/attendance/register-unknown`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body
+      });
+      const data = await res.json();
+
+      if (res.ok) {
+        toast(`✅ ${name} registered & marked present!`, 'success');
+        // Show success
+        document.getElementById('resultCard').innerHTML = `
+          <div class="result-banner present">
+            <div class="result-icon">🎉</div>
+            <div>
+              <div class="result-banner-title">Registered & Marked!</div>
+              <div class="result-banner-msg">${name} has been registered and attendance marked for today.</div>
+            </div>
+          </div>
+          <div class="detail-grid">
+            <div class="detail-row"><span class="detail-key">Name</span><span class="detail-val">${name}</span></div>
+            <div class="detail-row"><span class="detail-key">Emp ID</span><span class="detail-val">${id}</span></div>
+            <div class="detail-row"><span class="detail-key">Dept</span><span class="detail-val">${dept}</span></div>
+            <div class="detail-row"><span class="detail-key">Status</span><span class="detail-val" style="color:var(--green);">● PRESENT</span></div>
+          </div>
+        `;
+      } else {
+        toast(data.message || 'Registration failed', 'error');
+        btn.disabled = false;
+        btn.textContent = '✅ Register & Mark Attendance';
+      }
+    } catch (err) {
+      toast('Network error', 'error');
+      btn.disabled = false;
+      btn.textContent = '✅ Register & Mark Attendance';
+    }
+  }
+
+  // ── Register Employee ───────────────────────────
+  let regPhoto = null;
+
+  function handleRegPhoto(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    regPhoto = file;
+    const el = document.getElementById('photoSelected');
+    el.textContent = `✓ ${file.name}`;
+    el.style.display = 'block';
+    document.getElementById('regDZ').style.borderColor = 'var(--green)';
+  }
+
+  async function doRegister() {
+    const id = document.getElementById('r_id').value.trim();
+    const name = document.getElementById('r_name').value.trim();
+    if (!id || !name) { toast('ID and Name are required', 'error'); return; }
+    if (!regPhoto) { toast('Please upload a face photo', 'error'); return; }
+
+    const btn = document.getElementById('regBtn');
+    btn.disabled = true;
+    document.getElementById('regSpin').style.display = 'block';
+    document.getElementById('regBtnTxt').textContent = 'Registering...';
+
+    const fd = new FormData();
+    fd.append('employeeId', id);
+    fd.append('name', name);
+    fd.append('department', document.getElementById('r_dept').value);
+    fd.append('email', document.getElementById('r_email').value);
+    fd.append('image', regPhoto);
+
+    try {
+      const res = await fetch(`${API}/employees/register`, { method: 'POST', body: fd });
+      const data = await res.json();
+
+      if (res.ok) {
+        toast(`✅ ${name} registered successfully!`, 'success');
+        ['r_id', 'r_name', 'r_email'].forEach(f => document.getElementById(f).value = '');
+        document.getElementById('r_photo').value = '';
+        document.getElementById('photoSelected').style.display = 'none';
+        document.getElementById('regDZ').style.borderColor = '';
+        regPhoto = null;
+      } else {
+        toast(data.message || 'Registration failed', 'error');
+      }
+    } catch (err) {
+      toast('Network error', 'error');
+    } finally {
+      btn.disabled = false;
+      document.getElementById('regSpin').style.display = 'none';
+      document.getElementById('regBtnTxt').textContent = '✅ Register Employee';
+    }
+  }
+
+  // ── Records ─────────────────────────────────────
+  async function fetchByDate() {
+    const date = document.getElementById('dateFilter').value;
+    const url = date ? `${API}/attendance?date=${date}` : `${API}/attendance/today`;
+    await loadRecords(url);
+  }
+
+  async function fetchAll() {
+    await loadRecords(`${API}/attendance`);
+  }
+
+  async function loadRecords(url) {
+    try {
+      const res = await fetch(url);
+      const data = await res.json();
+      renderRecords(data.records || []);
+    } catch (err) {
+      toast('Failed to fetch records', 'error');
+    }
+  }
+
+  function renderRecords(records) {
+    const body = document.getElementById('recBody');
+    const empty = document.getElementById('recEmpty');
+    const table = document.getElementById('recTable');
+    const stats = document.getElementById('statsGrid');
+
+    if (!records.length) {
+      table.style.display = 'none';
+      empty.style.display = 'block';
+      empty.innerHTML = '<span class="big">📋</span>No records found';
+      stats.style.display = 'none';
+      return;
+    }
+
+    table.style.display = 'table';
+    empty.style.display = 'none';
+    stats.style.display = 'grid';
+
+    const present = records.filter(r => r.status === 'PRESENT');
+    const unknown = records.filter(r => r.status !== 'PRESENT');
+    const avgConf = present.length
+      ? Math.round(present.reduce((s, r) => s + (r.confidence || 0), 0) / present.length)
+      : 0;
+
+    document.getElementById('sTotal').textContent = records.length;
+    document.getElementById('sPresent').textContent = present.length;
+    document.getElementById('sUnknown').textContent = unknown.length;
+    document.getElementById('sAvg').textContent = avgConf ? avgConf + '%' : '—';
+
+    body.innerHTML = records.map(r => {
+      const isP = r.status === 'PRESENT';
+      const t = new Date(r.timestamp);
+      const time = isNaN(t) ? '—' : t.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+      return `
+        <tr>
+          <td>
+            <div class="emp-name">${r.employeeName}</div>
+            <div class="emp-id">${r.employeeId}</div>
+          </td>
+          <td>
+            <span class="badge ${isP ? 'badge-present' : 'badge-unknown'}">
+              ${isP ? '● Present' : '● Unknown'}
+            </span>
+          </td>
+          <td>
+            <span class="conf-pill">${r.confidence ? r.confidence + '%' : '—'}</span>
+          </td>
+          <td class="time-mono">${r.date}</td>
+          <td class="time-mono">${time}</td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  // ── Start camera on load ────────────────────────
+  startCamera();
+</script>
+</body>
+</html>
